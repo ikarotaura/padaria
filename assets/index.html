@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Controle de Débitos - Panificadora Familiar</title>
+
+  <!-- Manifesto PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#d2691e" />
+
+  <style>
+    /* Seu CSS igual antes, só fiz o background e cores combinando com Panificadora */
+    body {
+      font-family: Arial, sans-serif;
+      margin: 2rem;
+      background: #fff8e1;
+      color: #333;
+    }
+    h1, h2 {
+      color: #d2691e;
+    }
+    form, .filters, .summary, .clients-section {
+      background: #fff3e0;
+      padding: 1rem;
+      border-radius: 8px;
+      max-width: 700px;
+      margin-bottom: 2rem;
+    }
+    label {
+      display: block;
+      margin-top: 0.5rem;
+    }
+    input[type=text], input[type=tel], input[type=number], input[type=date], textarea, select {
+      width: 100%;
+      padding: 0.4rem;
+      margin-top: 0.2rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+    }
+    textarea {
+      resize: vertical;
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.6rem 1.2rem;
+      background-color: #d2691e;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: background-color 0.3s;
+    }
+    button:hover {
+      background-color: #a0522d;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1rem;
+    }
+    th, td {
+      border: 1px solid #d2691e;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    th {
+      background-color: #ffe4c4;
+    }
+    .send-btn {
+      background-color: #4caf50;
+      margin-right: 4px;
+    }
+    .send-btn:hover {
+      background-color: #388e3c;
+    }
+    .remove-btn {
+      background-color: #e53935;
+      margin-left: 4px;
+    }
+    .remove-btn:hover {
+      background-color: #c62828;
+    }
+    .pay-btn {
+      background-color: #0288d1;
+      margin-left: 4px;
+    }
+    .pay-btn:hover {
+      background-color: #0277bd;
+    }
+    #message {
+      margin-bottom: 1rem;
+      font-weight: bold;
+      color: green;
+    }
+    .filters label {
+      margin-top: 0;
+      font-weight: bold;
+    }
+    .filters > div {
+      margin-bottom: 0.8rem;
+    }
+    .inline {
+      display: inline-block;
+      width: calc(33% - 10px);
+      margin-right: 15px;
+      vertical-align: top;
+    }
+    .no-results {
+      color: #d2691e;
+      font-style: italic;
+      padding: 0.5rem 0;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Controle de Débitos - Panificadora Familiar</h1>
+
+  <div id="message"></div>
+
+  <form id="debitForm">
+    <label for="clientName">Nome do Cliente:</label>
+    <input type="text" id="clientName" list="clientList" required />
+    <datalist id="clientList"></datalist>
+
+    <label for="clientPhone">Celular (com DDD, ex: 11999998888):</label>
+    <input type="tel" id="clientPhone" pattern="[0-9]{10,13}" required />
+
+    <label for="productDesc">O que Pegou:</label>
+    <textarea id="productDesc" rows="2" required placeholder="Ex: 2 pães, 1 leite..."></textarea>
+
+    <label for="debitValue">Valor do Débito (R$):</label>
+    <input type="number" id="debitValue" min="0.01" step="0.01" required />
+
+    <label for="debitDate">Data do Débito:</label>
+    <input type="date" id="debitDate" required />
+
+    <button type="submit">Adicionar Débito</button>
+  </form>
+
+  <section class="filters">
+    <h2>Filtros</h2>
+    <div class="inline">
+      <label for="filterClientName">Buscar por Cliente:</label>
+      <input type="text" id="filterClientName" placeholder="Nome do cliente..." />
+    </div>
+    <div class="inline">
+      <label for="filterStartDate">Data Início:</label>
+      <input type="date" id="filterStartDate" />
+    </div>
+    <div class="inline">
+      <label for="filterEndDate">Data Fim:</label>
+      <input type="date" id="filterEndDate" />
+    </div>
+  </section>
+
+  <section class="debits-section">
+    <h2>Débitos dos Clientes</h2>
+    <table id="debitTable">
+      <thead>
+        <tr>
+          <th>Cliente</th>
+          <th>Celular</th>
+          <th>Data</th>
+          <th>Produto</th>
+          <th>Valor (R$)</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div id="noDebitsMsg" class="no-results" style="display:none;">Nenhum débito encontrado.</div>
+  </section>
+
+  <section class="summary">
+    <h2>Resumo por Cliente (Débitos Pendentes)</h2>
+    <ul id="totalList"></ul>
+  </section>
+
+  <section class="clients-section">
+    <h2>Clientes Salvos</h2>
+    <table id="clientTable">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Celular</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div id="noClientsMsg" class="no-results" style="display:none;">Nenhum cliente cadastrado.</div>
+  </section>
+
+  <script>
+    const form = document.getElementById('debitForm');
+    const tableBody = document.querySelector('#debitTable tbody');
+    const clientTableBody = document.querySelector('#clientTable tbody');
+    const totalList = document.getElementById('totalList');
+    const messageDiv = document.getElementById('message');
+    const clientList = document.getElementById('clientList');
+
+    const filterClientNameInput = document.getElementById('filterClientName');
+    const filterStartDateInput = document.getElementById('filterStartDate');
+    const filterEndDateInput = document.getElementById('filterEndDate');
+
+    const noDebitsMsg = document.getElementById('noDebitsMsg');
+    const noClientsMsg = document.getElementById('noClientsMsg');
+
+    let debits = [];
+    let clients = [];
+
+    window.onload = function () {
+      const savedDebits = localStorage.getItem('debitosPadaria');
+      const savedClients = localStorage.getItem('clientesPadaria');
+
+      if (savedDebits) {
+        debits = JSON.parse(savedDebits);
+      }
+
+      if (savedClients) {
+        clients = JSON.parse(savedClients);
+      }
+
+      renderAll();
+    };
+
+    function salvarNoLocalStorage() {
+      localStorage.setItem('debitosPadaria', JSON.stringify(debits));
+      localStorage.setItem('clientesPadaria', JSON.stringify(clients));
+    }
+
+    function renderClientList() {
+      clientList.innerHTML = '';
+      clients.forEach(client => {
+        const option = document.createElement('option');
+        option.value = client.name;
+        clientList.appendChild(option);
+      });
+    }
+
+    function renderClientTable() {
+      clientTableBody.innerHTML = '';
+      if (clients.length === 0) {
+        noClientsMsg.style.display = 'block';
+      } else {
+        noClientsMsg.style.display = 'none';
+        clients.forEach((client, index) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${client.name}</td>
+            <td>${client.phone}</td>
+            <td><button class="remove-btn" onclick="removerCliente(${index})">Remover</button></td>
+          `;
+          clientTableBody.appendChild(tr);
+        });
+      }
+    }
+
+    function filterDebits() {
+      const nameFilter = filterClientNameInput.value.trim().toLowerCase();
+      const startDateFilter = filterStartDateInput.value;
+      const endDateFilter = filterEndDateInput.value;
+
+      return debits.filter(d => {
+        if (d.pago) return false; // Ignora pagos
+
+        // Filtro por nome
+        if (nameFilter && !d.clientName.toLowerCase().includes(nameFilter)) return false;
+
+        // Filtro por data
+        if (startDateFilter && d.debitDate < startDateFilter) return false;
+        if (endDateFilter && d.debitDate > endDateFilter) return false;
+
+        return true;
+      });
+    }
+
+    function renderTable() {
+      tableBody.innerHTML = '';
+      const filteredDebits = filterDebits();
+
+      if (filteredDebits.length === 0) {
+        noDebitsMsg.style.display = 'block';
+      } else {
+        noDebitsMsg.style.display = 'none';
+        filteredDebits.forEach((debit, index) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `
+            <td>${debit.clientName}</td>
+            <td>${debit.clientPhone}</td>
+            <td>${new Date(debit.debitDate).toLocaleDateString('pt-BR')}</td>
+            <td>${debit.productDesc}</td>
+            <td>R$ ${debit.debitValue.toFixed(2)}</td>
+            <td>
+              <button class="send-btn" onclick="enviarDebito(${debit.id})">Enviar</button>
+              <button class="pay-btn" onclick="marcarPago(${debit.id})">Pago</button>
+            </td>
+          `;
+          tableBody.appendChild(tr);
+        });
+      }
+    }
+
+    function renderTotais() {
+      totalList.innerHTML = '';
+      const totais = {};
+
+      debits.forEach(d => {
+        if (d.pago) return;
+        const nomeNormalizado = d.clientName.trim().toLowerCase();
+        if (!totais[nomeNormalizado]) totais[nomeNormalizado] = { name: d.clientName, total: 0 };
+        totais[nomeNormalizado].total += d.debitValue;
+      });
+
+      const keys = Object.keys(totais);
+      if (keys.length === 0) {
+        totalList.innerHTML = '<li>Nenhum débito pendente.</li>';
+        return;
+      }
+
+      keys.forEach(key => {
+        const li = document.createElement('li');
+        li.textContent = `${totais[key].name}: R$ ${totais[key].total.toFixed(2)}`;
+        totalList.appendChild(li);
+      });
+    }
+
+    function renderAll() {
+      renderClientList();
+      renderClientTable();
+      renderTable();
+      renderTotais();
+    }
+
+    function enviarDebito(id) {
+      const debit = debits.find(d => d.id === id);
+      if (!debit) return;
+
+      const phone = debit.clientPhone.replace(/\D/g, '');
+      const date = new Date(debit.debitDate).toLocaleDateString('pt-BR');
+
+      const message = `Olá ${debit.clientName}, você tem um débito de R$ ${debit.debitValue.toFixed(2)} do dia ${date}, referente a: ${debit.productDesc}. Por favor, entre em contato para acertarmos. Obrigado!`;
+      const whatsappURL = `https://wa.me/55${phone}?text=${encodeURIComponent(message)}`;
+      window.open(whatsappURL, '_blank');
+      showMessage(`WhatsApp aberto para ${debit.clientName}`);
+    }
+
+    function marcarPago(id) {
+      if (confirm('Marcar este débito como pago?')) {
+        const debitIndex = debits.findIndex(d => d.id === id);
+        if (debitIndex !== -1) {
+          debits[debitIndex].pago = true;
+          salvarNoLocalStorage();
+          renderAll();
+          showMessage('Débito marcado como pago!');
+        }
+      }
+    }
+
+    function removerCliente(index) {
+      const cliente = clients[index];
+      if (confirm(`Remover o cliente "${cliente.name}" e TODOS os débitos (pagos e não pagos) dele?`)) {
+        const nome = cliente.name;
+        clients.splice(index, 1);
+        debits = debits.filter(d => d.clientName.trim().toLowerCase() !== nome.trim().toLowerCase());
+        salvarNoLocalStorage();
+        renderAll();
+        showMessage(`Cliente "${nome}" removido!`);
+      }
+    }
+
+    function showMessage(text) {
+      messageDiv.textContent = text;
+      setTimeout(() => messageDiv.textContent = '', 4000);
+    }
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const clientName = document.getElementById('clientName').value.trim();
+      const clientPhone = document.getElementById('clientPhone').value.trim();
+      const productDesc = document.getElementById('productDesc').value.trim();
+      const debitValue = parseFloat(document.getElementById('debitValue').value);
+      const debitDate = document.getElementById('debitDate').value;
+
+      if (!clientName || !clientPhone || !productDesc || !debitValue || !debitDate) {
+        alert('Por favor, preencha todos os campos corretamente.');
+        return;
+      }
+
+      // Verificar cliente já existe (ignorando maiúsculas/minúsculas)
+      const clientIndex = clients.findIndex(c => c.name.trim().toLowerCase() === clientName.toLowerCase());
+      if (clientIndex !== -1) {
+        // Atualizar telefone caso tenha mudado
+        if (clients[clientIndex].phone !== clientPhone) {
+          clients[clientIndex].phone = clientPhone;
+        }
+      } else {
+        // Novo cliente
+        clients.push({ name: clientName, phone: clientPhone });
+      }
+
+      // Criar ID único simples para cada débito
+      const newId = debits.length > 0 ? Math.max(...debits.map(d => d.id)) + 1 : 1;
+
+      debits.push({ id: newId, clientName, clientPhone, productDesc, debitValue, debitDate, pago: false });
+      salvarNoLocalStorage();
+      renderAll();
+      form.reset();
+      showMessage('Débito adicionado com sucesso!');
+    });
+
+    // Atualizar a lista de débitos ao mudar os filtros
+    filterClientNameInput.addEventListener('input', renderTable);
+    filterStartDateInput.addEventListener('change', renderTable);
+    filterEndDateInput.addEventListener('change', renderTable);
+
+  </script>
+
+  <!-- Registrar Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('service-worker.js').then(registration => {
+          console.log('Service Worker registrado com sucesso:', registration.scope);
+        }).catch(err => {
+          console.log('Falha ao registrar o Service Worker:', err);
+        });
+      });
+    }
+  </script>
+
+</body>
+</html>
